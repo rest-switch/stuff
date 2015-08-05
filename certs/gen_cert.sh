@@ -57,7 +57,7 @@ gen_cert() {
     # generate the csr
     openssl req -sha256 -new -nodes -key "${cert_private_key_filename}" -out "${cert_csr_filename}" -subj "${subject}"
 
-    local cert_public_key_filename="${target}${ext_public}.pub"
+    local cert_public_key_filename="${target}${ext_public}"
     local temp_public_key_filename="${target}.tmp"
 
     rm -f "${temp_public_key_filename}"
