@@ -19,37 +19,37 @@
 
 
 gen_ca() {
-	# remove spaces & drop to lowercase for output filename
-	local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
-	local subject="/C=${country}/O=${org}/OU=${org} Trust Network/CN=${org} Class 3 Public Certification Authority"
+    # remove spaces & drop to lowercase for output filename
+    local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
+    local subject="/C=${country}/O=${org}/OU=${org} Trust Network/CN=${org} Class 3 Public Certification Authority"
 
-	# generate ca private key
-	local ca_private_key_filename="${target}_ca.priv"
-	echo
-	echo "generating ${bits} bit ca private key: \"${ca_private_key_filename}\"..."
-	rm -f "${ca_private_key_filename}"
-	touch "${ca_private_key_filename}"
-	chmod 600 "${ca_private_key_filename}"
-	openssl genrsa -out "${ca_private_key_filename}" ${bits}
+    # generate ca private key
+    local ca_private_key_filename="${target}_ca.priv"
+    echo
+    echo "generating ${bits} bit ca private key: \"${ca_private_key_filename}\"..."
+    rm -f "${ca_private_key_filename}"
+    touch "${ca_private_key_filename}"
+    chmod 600 "${ca_private_key_filename}"
+    openssl genrsa -out "${ca_private_key_filename}" ${bits}
 
-	# gen ca public certificate
-	local ca_public_key_filename="${target}_ca.pub"
-	echo
-	echo "generating ca public certificate: \"${ca_public_key_filename}\"..."
-	rm -f "${ca_public_key_filename}"
-	openssl req -x509 -sha256 -new -nodes -extensions v3_ca -key "${ca_private_key_filename}" -days ${days} -out "${ca_public_key_filename}" -subj "${subject}"
+    # gen ca public certificate
+    local ca_public_key_filename="${target}_ca.pub"
+    echo
+    echo "generating ca public certificate: \"${ca_public_key_filename}\"..."
+    rm -f "${ca_public_key_filename}"
+    openssl req -x509 -sha256 -new -nodes -extensions v3_ca -key "${ca_private_key_filename}" -days ${days} -out "${ca_public_key_filename}" -subj "${subject}"
 
-	# check the certificate
-	echo
-	openssl x509 -text -noout -in "${ca_public_key_filename}"
-	echo
+    # check the certificate
+    echo
+    openssl x509 -text -noout -in "${ca_public_key_filename}"
+    echo
 
-	echo
-	echo
-	echo "  --> generated ca public cert:  ${ca_public_key_filename}"
-	echo "  --> generated ca private key:  ${ca_private_key_filename}"
-	echo
-	echo
+    echo
+    echo
+    echo "  --> generated ca public cert:  ${ca_public_key_filename}"
+    echo "  --> generated ca private key:  ${ca_private_key_filename}"
+    echo
+    echo
 }
 
 

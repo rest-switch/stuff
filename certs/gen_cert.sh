@@ -19,64 +19,64 @@
 
 
 gen_ca() {
-	# remove spaces & drop to lowercase for output filename
-	if [ -z "${outfile}" ]; then
-		local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
-	else
-		local target=${outfile}
-	fi
-	local subject="/C=${country}/ST=${state}/L=${city}/O=${org}/CN=${domain}"
+    # remove spaces & drop to lowercase for output filename
+    if [ -z "${outfile}" ]; then
+        local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
+    else
+        local target=${outfile}
+    fi
+    local subject="/C=${country}/ST=${state}/L=${city}/O=${org}/CN=${domain}"
 
-	if [ ! -z "${domain_alias}" ]; then
-		local san=DNS:${domain_alias// /,DNS:}
-	fi
+    if [ ! -z "${domain_alias}" ]; then
+        local san=DNS:${domain_alias// /,DNS:}
+    fi
 
-	# generate cert private key
-	local cert_private_key_filename="${target}_cert.priv"
-	echo
-	echo "generating ${bits} bit private key: \"${cert_private_key_filename}\"..."
-	rm -f "${cert_private_key_filename}"
-	touch "${cert_private_key_filename}"
-	chmod 600 "${cert_private_key_filename}"
-	openssl genrsa -out "${cert_private_key_filename}" ${bits}
+    # generate cert private key
+    local cert_private_key_filename="${target}_cert.priv"
+    echo
+    echo "generating ${bits} bit private key: \"${cert_private_key_filename}\"..."
+    rm -f "${cert_private_key_filename}"
+    touch "${cert_private_key_filename}"
+    chmod 600 "${cert_private_key_filename}"
+    openssl genrsa -out "${cert_private_key_filename}" ${bits}
 
-	local cert_csr_filename="${target}_cert.priv-csr"
-	echo
-	echo "generating certificate signing request: \"${cert_csr_filename}\"..."
-	rm -f "${cert_csr_filename}"
-	touch "${cert_csr_filename}"
-	chmod 600 "${cert_csr_filename}"
+    local cert_csr_filename="${target}_cert.priv-csr"
+    echo
+    echo "generating certificate signing request: \"${cert_csr_filename}\"..."
+    rm -f "${cert_csr_filename}"
+    touch "${cert_csr_filename}"
+    chmod 600 "${cert_csr_filename}"
 
-	# generate the csr
-	openssl req -sha256 -new -nodes -key "${cert_private_key_filename}" -out "${cert_csr_filename}" -subj "${subject}"
+    # generate the csr
+    openssl req -sha256 -new -nodes -key "${cert_private_key_filename}" -out "${cert_csr_filename}" -subj "${subject}"
 
-	local cert_public_key_filename="${target}_cert.pub"
-	local temp_public_key_filename="${target}.tmp"
+    local cert_public_key_filename="${target}_cert.pub"
+    local temp_public_key_filename="${target}.tmp"
 
-	rm -f "${temp_public_key_filename}"
-	touch "${temp_public_key_filename}"
-	if [ ! -z "${san}" ]; then
-		echo "subjectAltName=${san}" > "${temp_public_key_filename}"
-	fi
-	echo 'basicConstraints=CA:FALSE' >> "${temp_public_key_filename}"
-	echo 'keyUsage=critical,digitalSignature,keyEncipherment' >> "${temp_public_key_filename}"
-	echo 'extendedKeyUsage=serverAuth,clientAuth' >> "${temp_public_key_filename}"
+    rm -f "${temp_public_key_filename}"
+    touch "${temp_public_key_filename}"
+    if [ ! -z "${san}" ]; then
+        echo "subjectAltName=${san}" > "${temp_public_key_filename}"
+    fi
+    echo 'basicConstraints=CA:FALSE' >> "${temp_public_key_filename}"
+    echo 'keyUsage=critical,digitalSignature,keyEncipherment' >> "${temp_public_key_filename}"
+    echo 'extendedKeyUsage=serverAuth,clientAuth' >> "${temp_public_key_filename}"
 
-	openssl x509 -req -days ${days} -in "${cert_csr_filename}" -extfile "${temp_public_key_filename}" -CA "${ca_public_key_filename}" -CAkey "${ca_private_key_filename}" -CAcreateserial -out "${cert_public_key_filename}"
-	rm -f "${temp_public_key_filename}"
-	rm -f "${cert_csr_filename}"
+    openssl x509 -req -days ${days} -in "${cert_csr_filename}" -extfile "${temp_public_key_filename}" -CA "${ca_public_key_filename}" -CAkey "${ca_private_key_filename}" -CAcreateserial -out "${cert_public_key_filename}"
+    rm -f "${temp_public_key_filename}"
+    rm -f "${cert_csr_filename}"
 
-	# check the certificate
-	echo
-	openssl x509 -text -noout -in "${cert_public_key_filename}"
-	echo
+    # check the certificate
+    echo
+    openssl x509 -text -noout -in "${cert_public_key_filename}"
+    echo
 
-	echo
-	echo
-	echo "  --> generated cert public cert:  ${cert_public_key_filename}"
-	echo "  --> generated cert private key:  ${cert_private_key_filename}"
-	echo
-	echo
+    echo
+    echo
+    echo "  --> generated cert public cert:  ${cert_public_key_filename}"
+    echo "  --> generated cert private key:  ${cert_private_key_filename}"
+    echo
+    echo
 }
 
 
@@ -166,11 +166,11 @@ while [ $# -gt 0 ]; do
         ;;
     -u|--ca-pub)
         shift
-	ca_public_key_filename=$1
+    ca_public_key_filename=$1
         ;;
     -v|--ca-priv)
         shift
-	ca_private_key_filename=$1
+    ca_private_key_filename=$1
         ;;
     -y|--years)
         shift
