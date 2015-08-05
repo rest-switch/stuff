@@ -17,6 +17,13 @@
 # Author: John Clark (johnc@restswitch.com)
 #
 
+#
+# example usage:
+#   ./gen_ca.sh "REST Switch"
+#
+
+ext_public=_ca_public.cer
+ext_private=_ca_private
 
 gen_ca() {
     # remove spaces & drop to lowercase for output filename
@@ -24,7 +31,7 @@ gen_ca() {
     local subject="/C=${country}/O=${org}/OU=${org} Trust Network/CN=${org} Class 3 Public Certification Authority"
 
     # generate ca private key
-    local ca_private_key_filename="${target}_ca.priv"
+    local ca_private_key_filename="${target}${ext_private}"
     echo
     echo "generating ${bits} bit ca private key: \"${ca_private_key_filename}\"..."
     rm -f "${ca_private_key_filename}"
@@ -33,7 +40,7 @@ gen_ca() {
     openssl genrsa -out "${ca_private_key_filename}" ${bits}
 
     # gen ca public certificate
-    local ca_public_key_filename="${target}_ca.pub"
+    local ca_public_key_filename="${target}${ext_public}"
     echo
     echo "generating ca public certificate: \"${ca_public_key_filename}\"..."
     rm -f "${ca_public_key_filename}"

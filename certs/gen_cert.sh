@@ -17,8 +17,15 @@
 # Author: John Clark (johnc@restswitch.com)
 #
 
+#
+# example usage:
+#   ./gen_cert.sh -a "rest-switch.com" -d www.restswitch.com -o "REST Switch" -c Durham -s "North Carolina" -u rest-switch_ca_public.cer -v rest-switch_ca_private
+#
 
-gen_ca() {
+ext_public=_cert_public.cer
+ext_private=_cert_private
+
+gen_cert() {
     # remove spaces & drop to lowercase for output filename
     if [ -z "${outfile}" ]; then
         local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
@@ -32,7 +39,7 @@ gen_ca() {
     fi
 
     # generate cert private key
-    local cert_private_key_filename="${target}_cert.priv"
+    local cert_private_key_filename="${target}${ext_private}"
     echo
     echo "generating ${bits} bit private key: \"${cert_private_key_filename}\"..."
     rm -f "${cert_private_key_filename}"
@@ -40,7 +47,7 @@ gen_ca() {
     chmod 600 "${cert_private_key_filename}"
     openssl genrsa -out "${cert_private_key_filename}" ${bits}
 
-    local cert_csr_filename="${target}_cert.priv-csr"
+    local cert_csr_filename="${target}${ext_private}-csr"
     echo
     echo "generating certificate signing request: \"${cert_csr_filename}\"..."
     rm -f "${cert_csr_filename}"
@@ -50,7 +57,7 @@ gen_ca() {
     # generate the csr
     openssl req -sha256 -new -nodes -key "${cert_private_key_filename}" -out "${cert_csr_filename}" -subj "${subject}"
 
-    local cert_public_key_filename="${target}_cert.pub"
+    local cert_public_key_filename="${target}${ext_public}.pub"
     local temp_public_key_filename="${target}.tmp"
 
     rm -f "${temp_public_key_filename}"
@@ -244,5 +251,5 @@ fi
 if [ -z "${country}" ]; then country=US; fi
 
 
-gen_ca
+gen_cert
 
