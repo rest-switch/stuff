@@ -27,7 +27,7 @@ ext_private=_ca_private
 
 gen_ca() {
     # remove spaces & drop to lowercase for output filename
-    local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
+    local target=$(echo "${org}" | sed "s/ /-/g" | tr '[:upper:]' '[:lower:]')
     local subject="/C=${country}/O=${org}/OU=${org} Trust Network/CN=${org} Class 3 Public Certification Authority"
 
     # generate ca private key

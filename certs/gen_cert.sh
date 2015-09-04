@@ -28,14 +28,14 @@ ext_private=_cert_private
 gen_cert() {
     # remove spaces & drop to lowercase for output filename
     if [ -z "${outfile}" ]; then
-        local target=$(echo ${org// /-} | tr '[:upper:]' '[:lower:]')
+        local target=$(echo "${org}" | sed "s/ /-/g" | tr '[:upper:]' '[:lower:]')
     else
         local target=${outfile}
     fi
     local subject="/C=${country}/ST=${state}/L=${city}/O=${org}/CN=${domain}"
 
     if [ ! -z "${domain_alias}" ]; then
-        local san=DNS:${domain_alias// /,DNS:}
+        local san=$(echo "${domain_alias}" | sed "s/^/DNS:/; s/ /,DNS:/g")
     fi
 
     # generate cert private key
