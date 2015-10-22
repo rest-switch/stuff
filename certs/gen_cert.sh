@@ -23,6 +23,7 @@
 #
 
 ext_public=_cert_public.cer
+ext_public_chain=_cert_chain_public.cer
 ext_private=_cert_private
 
 gen_cert() {
@@ -57,6 +58,7 @@ gen_cert() {
     # generate the csr
     openssl req -sha256 -new -nodes -key "${cert_private_key_filename}" -out "${cert_csr_filename}" -subj "${subject}"
 
+    # sign the csr to make the cert public key
     local cert_public_key_filename="${target}${ext_public}"
     local temp_public_key_filename="${target}.tmp"
 
@@ -73,14 +75,23 @@ gen_cert() {
     rm -f "${temp_public_key_filename}"
     rm -f "${cert_csr_filename}"
 
-    # check the certificate
+    # check the cert public key
     echo
     openssl x509 -text -noout -in "${cert_public_key_filename}"
     echo
 
+    # generate the cert public key chain
+    local cert_chain_public_key_filename="${target}${ext_public_chain}"
+    rm -f "${cert_chain_public_key_filename}"
+    touch "${cert_chain_public_key_filename}"
+    chmod 600 "${cert_chain_public_key_filename}"
+    cat "${cert_public_key_filename}" > "${cert_chain_public_key_filename}"
+    cat "${ca_public_key_filename}" >> "${cert_chain_public_key_filename}"
+
     echo
     echo
     echo "  --> generated cert public cert:  ${cert_public_key_filename}"
+    echo "  --> generated cert public cert chain:  ${cert_chain_public_key_filename}"
     echo "  --> generated cert private key:  ${cert_private_key_filename}"
     echo
     echo
