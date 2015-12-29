@@ -1,0 +1,415 @@
+From f017d365288881bf0a9fe59982038aca1086c816 Mon Sep 17 00:00:00 2001
+From: John Clark <inindev@gmail.com>
+Date: Tue, 29 Dec 2015 16:44:07 +0000
+Subject: [PATCH] arduino yun support for chaos calmer
+
+---
+ .../ar71xx/base-files/etc/uci-defaults/01_leds     |   5 +
+ .../ar71xx/base-files/etc/uci-defaults/02_network  |   1 +
+ target/linux/ar71xx/base-files/lib/ar71xx.sh       |   3 +
+ .../ar71xx/base-files/lib/upgrade/platform.sh      |   1 +
+ target/linux/ar71xx/config-3.18                    |   1 +
+ .../files/arch/mips/ath79/mach-arduino-yun.c       | 137 +++++++++++++++++++++
+ .../linux/ar71xx/generic/profiles/arduino-yun.mk   |  19 +++
+ target/linux/ar71xx/image/Makefile                 |   5 +
+ .../820-MIPS-ath79-add_gpio_function2_setup.patch  |  72 +++++++++++
+ .../907-MIPS-ath79-Arduino-yun-support.patch       |  42 +++++++
+ 10 files changed, 286 insertions(+)
+ create mode 100644 target/linux/ar71xx/files/arch/mips/ath79/mach-arduino-yun.c
+ create mode 100644 target/linux/ar71xx/generic/profiles/arduino-yun.mk
+ create mode 100644 target/linux/ar71xx/patches-3.18/820-MIPS-ath79-add_gpio_function2_setup.patch
+ create mode 100644 target/linux/ar71xx/patches-3.18/907-MIPS-ath79-Arduino-yun-support.patch
+
+diff --git a/target/linux/ar71xx/base-files/etc/uci-defaults/01_leds b/target/linux/ar71xx/base-files/etc/uci-defaults/01_leds
+index 5241db2..32946ce 100644
+--- a/target/linux/ar71xx/base-files/etc/uci-defaults/01_leds
++++ b/target/linux/ar71xx/base-files/etc/uci-defaults/01_leds
+@@ -46,6 +46,11 @@ ap113)
+ 	ucidef_set_led_usbdev "usb" "USB" "ap113:green:usb" "1-1"
+ 	;;
+ 
++arduino-yun)
++	ucidef_set_led_wlan "wlan" "WLAN" "arduino:blue:wlan" "phy0tpt"
++	ucidef_set_led_usbdev "usb" "USB" "arduino:white:usb" "1-1.1"
++	;;
++
+ bsb)
+ 	ucidef_set_led_default "sys" "SYS" "bsb:red:sys" "1"
+ 	;;
+diff --git a/target/linux/ar71xx/base-files/etc/uci-defaults/02_network b/target/linux/ar71xx/base-files/etc/uci-defaults/02_network
+index 8143d2d..bb3b9d5 100755
+--- a/target/linux/ar71xx/base-files/etc/uci-defaults/02_network
++++ b/target/linux/ar71xx/base-files/etc/uci-defaults/02_network
+@@ -368,6 +368,7 @@ wp543)
+ 	ucidef_set_interface_lan "eth0"
+ 	;;
+ 
++arduino-yun | \
+ dir-505-a1)
+ 	ucidef_set_interface_lan "eth1"
+ 	;;
+diff --git a/target/linux/ar71xx/base-files/lib/ar71xx.sh b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+index 839abc7..23ea436 100755
+--- a/target/linux/ar71xx/base-files/lib/ar71xx.sh
++++ b/target/linux/ar71xx/base-files/lib/ar71xx.sh
+@@ -383,6 +383,9 @@ ar71xx_board_detect() {
+ 	*"Archer C7")
+ 		name="archer-c7"
+ 		;;
++	*"Arduino Yun")
++		name="arduino-yun"
++		;;
+ 	*"Atheros AP96")
+ 		name="ap96"
+ 		;;
+diff --git a/target/linux/ar71xx/base-files/lib/upgrade/platform.sh b/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
+index ab69e4f..191eaf9 100755
+--- a/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
++++ b/target/linux/ar71xx/base-files/lib/upgrade/platform.sh
+@@ -180,6 +180,7 @@ platform_check_image() {
+ 	ap136-020 | \
+ 	ap135-020 | \
+ 	ap96 | \
++	arduino-yun | \
+ 	bxu2000n-2-a1 | \
+ 	db120 | \
+ 	f9k1115v2 |\
+diff --git a/target/linux/ar71xx/config-3.18 b/target/linux/ar71xx/config-3.18
+index e9b3c7c..0585a59 100644
+--- a/target/linux/ar71xx/config-3.18
++++ b/target/linux/ar71xx/config-3.18
+@@ -39,6 +39,7 @@ CONFIG_ATH79_MACH_AP81=y
+ CONFIG_ATH79_MACH_AP83=y
+ CONFIG_ATH79_MACH_AP96=y
+ CONFIG_ATH79_MACH_ARCHER_C7=y
++CONFIG_ATH79_MACH_ARDUINO_YUN=y
+ CONFIG_ATH79_MACH_AW_NR580=y
+ CONFIG_ATH79_MACH_ANTMINER_S1=y
+ CONFIG_ATH79_MACH_ANTMINER_S3=y
+diff --git a/target/linux/ar71xx/files/arch/mips/ath79/mach-arduino-yun.c b/target/linux/ar71xx/files/arch/mips/ath79/mach-arduino-yun.c
+new file mode 100644
+index 0000000..8bd00a7
+--- /dev/null
++++ b/target/linux/ar71xx/files/arch/mips/ath79/mach-arduino-yun.c
+@@ -0,0 +1,137 @@
++/*
++ *  Arduino Yun support
++ *
++ *  Copyright (C) 2011-2012 Gabor Juhos <juhosg@openwrt.org>
++ *  Copyright (C) 2015 Hauke Mehrtens <hauke@hauke-m.de>
++ *
++ *  This program is free software; you can redistribute it and/or modify it
++ *  under the terms of the GNU General Public License version 2 as published
++ *  by the Free Software Foundation.
++ */
++
++#include "dev-eth.h"
++#include "dev-gpio-buttons.h"
++#include "dev-leds-gpio.h"
++#include "dev-m25p80.h"
++#include "dev-spi.h"
++#include "dev-usb.h"
++#include "dev-wmac.h"
++#include "machtypes.h"
++#include <asm/mach-ath79/ar71xx_regs.h>
++#include <asm/mach-ath79/ath79.h>
++#include "common.h"
++#include "gpio.h"
++#include "linux/gpio.h"
++
++// Uncomment to have reset on gpio18 instead of gipo7
++#define DS2_B
++
++#define DS_GPIO_LED_WLAN		0
++#define DS_GPIO_LED_USB			1
++
++#define DS_GPIO_OE			21
++#define DS_GPIO_AVR_RESET		18
++
++// Maintained to have the console in the previous version of DS2 working
++#define DS_GPIO_AVR_RESET_DS2		7
++
++#define DS_GPIO_OE2			22
++#define DS_GPIO_UART_ENA		23
++#define DS_GPIO_CONF_BTN		20
++
++#define DS_KEYS_POLL_INTERVAL		20	/* msecs */
++#define DS_KEYS_DEBOUNCE_INTERVAL	(3 * DS_KEYS_POLL_INTERVAL)
++
++#define DS_MAC0_OFFSET			0x0000
++#define DS_MAC1_OFFSET			0x0006
++#define DS_CALDATA_OFFSET		0x1000
++#define DS_WMAC_MAC_OFFSET		0x1002
++
++
++static struct gpio_led ds_leds_gpio[] __initdata = {
++	{
++		.name		= "arduino:white:usb",
++		.gpio		= DS_GPIO_LED_USB,
++		.active_low	= 0,
++	},
++	{
++		.name		= "arduino:blue:wlan",
++		.gpio		= DS_GPIO_LED_WLAN,
++		.active_low	= 0,
++	},
++};
++
++static void __init ds_common_setup(void)
++{
++	static u8 mac[6];
++
++	u8 *art = (u8 *) KSEG1ADDR(0x1fff0000);
++	ath79_register_m25p80(NULL);
++
++	if (ar93xx_wmac_read_mac_address(mac)) {
++		ath79_register_wmac(NULL, NULL);
++	} else {
++		ath79_register_wmac(art + DS_CALDATA_OFFSET,
++				    art + DS_WMAC_MAC_OFFSET);
++		memcpy(mac, art + DS_WMAC_MAC_OFFSET, sizeof(mac));
++	}
++
++	mac[3] |= 0x08;
++	ath79_init_mac(ath79_eth0_data.mac_addr, mac, 0);
++
++	mac[3] &= 0xF7;
++	ath79_init_mac(ath79_eth1_data.mac_addr, mac, 0);
++	ath79_register_mdio(0, 0x0);
++
++	/* LAN ports */
++	ath79_register_eth(1);
++
++	/* WAN port */
++	ath79_register_eth(0);
++}
++
++static void __init ds_setup(void)
++{
++	u32 t;
++
++	ds_common_setup();
++
++	ath79_register_leds_gpio(-1, ARRAY_SIZE(ds_leds_gpio),
++				 ds_leds_gpio);
++	ath79_register_usb();
++
++	//Disable the Function for some pins to have GPIO functionality active
++	// GPIO6-7-8 and GPIO11
++	ath79_gpio_function_setup(AR933X_GPIO_FUNC_JTAG_DISABLE | AR933X_GPIO_FUNC_I2S_MCK_EN, 0);
++
++	ath79_gpio_function2_setup(AR933X_GPIO_FUNC2_JUMPSTART_DISABLE, 0);
++
++	printk("Setting DogStick2 GPIO\n");
++
++	t = ath79_reset_rr(AR933X_RESET_REG_BOOTSTRAP);
++	t |= AR933X_BOOTSTRAP_MDIO_GPIO_EN;
++	ath79_reset_wr(AR933X_RESET_REG_BOOTSTRAP, t);
++
++	// Put the avr reset to high
++	if (gpio_request_one(DS_GPIO_AVR_RESET_DS2,
++	    GPIOF_OUT_INIT_LOW | GPIOF_EXPORT_DIR_FIXED, "OE-1") != 0)
++		printk("Error setting GPIO OE\n");
++	gpio_unexport(DS_GPIO_AVR_RESET_DS2);
++	gpio_free(DS_GPIO_AVR_RESET_DS2);
++
++	// enable OE of level shifter
++	if (gpio_request_one(DS_GPIO_OE,
++	    GPIOF_OUT_INIT_LOW | GPIOF_EXPORT_DIR_FIXED, "OE-1") != 0)
++		printk("Error setting GPIO OE\n");
++
++	if (gpio_request_one(DS_GPIO_UART_ENA,
++	    GPIOF_OUT_INIT_LOW | GPIOF_EXPORT_DIR_FIXED, "UART-ENA") != 0)
++		printk("Error setting GPIO Uart Enable\n");
++
++	// enable OE of level shifter
++	if (gpio_request_one(DS_GPIO_OE2,
++	    GPIOF_OUT_INIT_LOW | GPIOF_EXPORT_DIR_FIXED, "OE-2") != 0)
++		printk("Error setting GPIO OE2\n");
++}
++
++MIPS_MACHINE(ATH79_MACH_ARDUINO_YUN, "Yun", "Arduino Yun", ds_setup);
+diff --git a/target/linux/ar71xx/generic/profiles/arduino-yun.mk b/target/linux/ar71xx/generic/profiles/arduino-yun.mk
+new file mode 100644
+index 0000000..8ae5054
+--- /dev/null
++++ b/target/linux/ar71xx/generic/profiles/arduino-yun.mk
+@@ -0,0 +1,19 @@
++#
++# Copyright (C) 2009-2010 OpenWrt.org
++#
++# This is free software, licensed under the GNU General Public License v2.
++# See /LICENSE for more information.
++#
++
++define Profile/Yun
++	NAME:=Arduino Yun based on Atheros AR9331
++	PACKAGES:=kmod-usb-core kmod-usb2
++endef
++
++define Profile/Yun/Description
++	Package set optimized for the Arduino Yun.
++	This is sometimes also named Genuino Yun or Linino Yun.
++endef
++
++$(eval $(call Profile,Yun))
++
+diff --git a/target/linux/ar71xx/image/Makefile b/target/linux/ar71xx/image/Makefile
+index 95d9a08..3ee2b70 100644
+--- a/target/linux/ar71xx/image/Makefile
++++ b/target/linux/ar71xx/image/Makefile
+@@ -1013,6 +1013,8 @@ mynet_n600_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,64k(devdat
+ mynet_rext_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,7808k(firmware),64k(nvram)ro,64k(ART)ro
+ zyx_nbg6716_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(env)ro,64k(RFdata)ro,-(nbu);ar934x-nfc:2048k(zyxel_rfsd),2048k(romd),1024k(header),2048k(kernel),-(ubi)
+ qihoo_c301_mtdlayout=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env),64k(devdata),64k(devconf),15744k(firmware),64k(warm_start),64k(action_image_config),64k(radiocfg)ro;spi0.1:15360k(upgrade2),1024k(privatedata)
++yun_mtdlayout_8M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,6464k(rootfs),1280k(kernel),64k(nvram),64k(art),7744k@0x50000(firmware)
++yun_mtdlayout_16M=mtdparts=spi0.0:256k(u-boot)ro,64k(u-boot-env)ro,14656k(rootfs),1280k(kernel),64k(nvram),64k(art),15936k@0x50000(firmware)
+ 
+ 
+ define Image/BuildKernel
+@@ -1895,6 +1897,8 @@ $(eval $(call SingleProfile,AthLzma,64k,WLR8100,wlr8100,WLR8100,ttyS0,115200,$$(
+ $(eval $(call SingleProfile,AthLzma,64k,WPJ344_16M,wpj344-16M,WPJ344,ttyS0,115200,$$(wpj344_mtdlayout_16M),KRuImage,65536))
+ $(eval $(call SingleProfile,AthLzma,64k,WPJ531_16M,wpj531-16M,WPJ531,ttyS0,115200,$$(wpj531_mtdlayout_16M),KRuImage,65536))
+ $(eval $(call SingleProfile,AthLzma,64k,WPJ558_16M,wpj558-16M,WPJ558,ttyS0,115200,$$(wpj558_mtdlayout_16M),KRuImage,65536))
++$(eval $(call SingleProfile,AthLzma,64k,YUN_8M,yun-8M,Yun,ttyATH0,250000,$$(yun_mtdlayout_8M),RKuImage))
++$(eval $(call SingleProfile,AthLzma,64k,YUN_16M,yun-16M,Yun,ttyATH0,250000,$$(yun_mtdlayout_16M),RKuImage))
+ 
+ $(eval $(call SingleProfile,Belkin,64k,F9K1115V2,f9k1115v2,F9K1115V2,ttyS0,115200,$$(f9k1115v2_mtdlayout),BR-6679BAC))
+ 
+@@ -2082,6 +2086,7 @@ $(eval $(call MultiProfile,WPE72,WPE72_4M WPE72_8M WPE72_16M))
+ $(eval $(call MultiProfile,WPJ344,WPJ344_16M))
+ $(eval $(call MultiProfile,WPJ531,WPJ531_16M))
+ $(eval $(call MultiProfile,WPJ558,WPJ558_16M))
++$(eval $(call MultiProfile,Yun,YUN_16M YUN_8M))
+ 
+ $(eval $(call MultiProfile,Minimal,$(SINGLE_PROFILES)))
+ $(eval $(call MultiProfile,Madwifi,EAP7660D UBNTRS UBNTRSPRO UBNTLSSR71 WP543))
+diff --git a/target/linux/ar71xx/patches-3.18/820-MIPS-ath79-add_gpio_function2_setup.patch b/target/linux/ar71xx/patches-3.18/820-MIPS-ath79-add_gpio_function2_setup.patch
+new file mode 100644
+index 0000000..5c90057
+--- /dev/null
++++ b/target/linux/ar71xx/patches-3.18/820-MIPS-ath79-add_gpio_function2_setup.patch
+@@ -0,0 +1,72 @@
++Add access to the function2 gpio register. This probably has to be
++converted into a pimux driver later on. This is needed for some setup
++functions on the Arduino Yun.
++
++--- a/arch/mips/ath79/common.h
+++++ b/arch/mips/ath79/common.h
++@@ -27,6 +27,7 @@ void ath79_ddr_wb_flush(unsigned int reg
++ void ath79_gpio_function_enable(u32 mask);
++ void ath79_gpio_function_disable(u32 mask);
++ void ath79_gpio_function_setup(u32 set, u32 clear);
+++void ath79_gpio_function2_setup(u32 set, u32 clear);
++ void ath79_gpio_output_select(unsigned gpio, u8 val);
++ int ath79_gpio_direction_select(unsigned gpio, bool oe);
++ void ath79_gpio_init(void);
++--- a/arch/mips/ath79/gpio.c
+++++ b/arch/mips/ath79/gpio.c
++@@ -195,6 +195,36 @@ static void __iomem *ath79_gpio_get_func
++ 	return ath79_gpio_base + reg;
++ }
++ 
+++static void __iomem *ath79_gpio_get_function2_reg(void)
+++{
+++	u32 reg = 0;
+++
+++	if (soc_is_ar71xx() ||
+++	    soc_is_ar724x() ||
+++	    soc_is_ar913x() ||
+++	    soc_is_ar933x())
+++		reg = AR71XX_GPIO_REG_FUNC_2;
+++	else
+++		BUG();
+++
+++	return ath79_gpio_base + reg;
+++}
+++
+++
+++void ath79_gpio_function2_setup(u32 set, u32 clear)
+++{
+++	void __iomem *reg = ath79_gpio_get_function2_reg();
+++	unsigned long flags;
+++
+++	spin_lock_irqsave(&ath79_gpio_lock, flags);
+++
+++	__raw_writel((__raw_readl(reg) & ~clear) | set, reg);
+++	/* flush write */
+++	__raw_readl(reg);
+++
+++	spin_unlock_irqrestore(&ath79_gpio_lock, flags);
+++}
+++
++ void ath79_gpio_function_setup(u32 set, u32 clear)
++ {
++ 	void __iomem *reg = ath79_gpio_get_function_reg();
++--- a/arch/mips/include/asm/mach-ath79/ar71xx_regs.h
+++++ b/arch/mips/include/asm/mach-ath79/ar71xx_regs.h
++@@ -847,6 +847,7 @@
++ #define AR71XX_GPIO_REG_INT_PENDING	0x20
++ #define AR71XX_GPIO_REG_INT_ENABLE	0x24
++ #define AR71XX_GPIO_REG_FUNC		0x28
+++#define AR71XX_GPIO_REG_FUNC_2		0x30
++ 
++ #define AR934X_GPIO_REG_OUT_FUNC0	0x2c
++ #define AR934X_GPIO_REG_OUT_FUNC1	0x30
++@@ -971,6 +972,8 @@
++ #define AR724X_GPIO_FUNC_UART_EN		BIT(1)
++ #define AR724X_GPIO_FUNC_JTAG_DISABLE		BIT(0)
++ 
+++#define AR933X_GPIO_FUNC2_JUMPSTART_DISABLE 	BIT(9)
+++
++ #define AR913X_GPIO_FUNC_WMAC_LED_EN		BIT(22)
++ #define AR913X_GPIO_FUNC_EXP_PORT_CS_EN		BIT(21)
++ #define AR913X_GPIO_FUNC_I2S_REFCLKEN		BIT(20)
+diff --git a/target/linux/ar71xx/patches-3.18/907-MIPS-ath79-Arduino-yun-support.patch b/target/linux/ar71xx/patches-3.18/907-MIPS-ath79-Arduino-yun-support.patch
+new file mode 100644
+index 0000000..9834588
+--- /dev/null
++++ b/target/linux/ar71xx/patches-3.18/907-MIPS-ath79-Arduino-yun-support.patch
+@@ -0,0 +1,42 @@
++--- a/arch/mips/ath79/Kconfig
+++++ b/arch/mips/ath79/Kconfig
++@@ -155,6 +155,19 @@ config ATH79_MACH_AP96
++ 	select ATH79_DEV_M25P80
++ 	select ATH79_DEV_USB
++ 
+++config ATH79_MACH_ARDUINO_YUN
+++	bool "Arduino Yun"
+++	select SOC_AR933X
+++	select ATH79_DEV_ETH
+++	select ATH79_DEV_GPIO_BUTTONS
+++	select ATH79_DEV_LEDS_GPIO
+++	select ATH79_DEV_M25P80
+++	select ATH79_DEV_USB
+++	select ATH79_DEV_WMAC
+++	help
+++	  Say 'Y' here if you want your kernel to support the
+++	  Arduino Yun.
+++
++ config ATH79_MACH_DB120
++ 	bool "Atheros DB120 reference board"
++ 	select SOC_AR934X
++--- a/arch/mips/ath79/machtypes.h
+++++ b/arch/mips/ath79/machtypes.h
++@@ -35,6 +35,7 @@ enum ath79_mach_type {
++ 	ATH79_MACH_AP96,		/* Atheros AP96 */
++ 	ATH79_MACH_ARCHER_C5,		/* TP-LINK Archer C5 board */
++ 	ATH79_MACH_ARCHER_C7,		/* TP-LINK Archer C7 board */
+++	ATH79_MACH_ARDUINO_YUN,		/* Arduino Yun */
++ 	ATH79_MACH_AW_NR580,		/* AzureWave AW-NR580 */
++ 	ATH79_MACH_BHU_BXU2000N2_A1,	/* BHU BXU2000n-2 A1 */
++ 	ATH79_MACH_BSB,			/* Smart Electronics Black Swift board */
++--- a/arch/mips/ath79/Makefile
+++++ b/arch/mips/ath79/Makefile
++@@ -52,6 +52,7 @@ obj-$(CONFIG_ATH79_MACH_AP81)		+= mach-ap81.o
++ obj-$(CONFIG_ATH79_MACH_AP83)		+= mach-ap83.o
++ obj-$(CONFIG_ATH79_MACH_AP96)		+= mach-ap96.o
++ obj-$(CONFIG_ATH79_MACH_ARCHER_C7)	+= mach-archer-c7.o
+++obj-$(CONFIG_ATH79_MACH_ARDUINO_YUN)	+= mach-arduino-yun.o
++ obj-$(CONFIG_ATH79_MACH_AW_NR580)	+= mach-aw-nr580.o
++ obj-$(CONFIG_ATH79_MACH_BHU_BXU2000N2_A)+= mach-bhu-bxu2000n2-a.o
++ obj-$(CONFIG_ATH79_MACH_BSB)		+= mach-bsb.o
+-- 
+2.4.3
+
